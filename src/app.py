@@ -5,7 +5,7 @@ A super simple FastAPI application that allows students to view and sign up
 for extracurricular activities at Mergington High School.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
@@ -19,8 +19,10 @@ current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
 
-# In-memory activity database
-activities = {
+
+def get_default_activities() -> dict:
+    """Get a fresh copy of the default activities database"""
+    return {
     "Chess Club": {
         "description": "Learn strategies and compete in chess tournaments",
         "schedule": "Fridays, 3:30 PM - 5:00 PM",
@@ -75,7 +77,16 @@ activities = {
         "max_participants": 14,
         "participants": ["liam@mergington.edu", "zoe@mergington.edu"]
     }
-}
+    }
+
+
+# Global activities database instance
+activities = get_default_activities()
+
+
+def get_activities_db() -> dict:
+    """Dependency that provides access to the activities database"""
+    return activities
 
 
 @app.get("/")
@@ -84,17 +95,17 @@ def root():
 
 
 @app.get("/activities")
-def get_activities():
-    return activities
+def get_activities_endpoint(db: dict = Depends(get_activities_db)):
+    return db
 
 
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
+def signup_for_activity(activity_name: str, email: str, db: dict = Depends(get_activities_db)):
     """Sign up a student for an activity"""
-    if activity_name not in activities:
+    if activity_name not in db:
         raise HTTPException(status_code=404, detail="Activity not found")
 
-    activity = activities[activity_name]
+    activity = db[activity_name]
 
     if email in activity["participants"]:
         raise HTTPException(
